@@ -103,12 +103,13 @@ export default function App() {
         const data = docSnap.data();
         if (data.players) setPlayers(data.players);
         if (data.schedule) setSchedule(data.schedule);
+      } else {
+        console.log("No document found in Firestore!");
       }
-      setLoadingData(false);
     }, (error) => {
-      console.error("Error fetching real-time data: ", error);
-      setLoadingData(false);
+      console.error("Error listening to Firestore:", error);
     });
+      
 
     return () => unsubscribe();
   }, []);
