@@ -7,6 +7,8 @@ import {
   XCircle, HelpCircle, Clock3, Dumbbell, ChevronLeft, LayoutList, CalendarDays,
   Smartphone, ArrowLeft, History
 } from 'lucide-react';
+import { db } from './firebase'; // Make sure your firebase.js is properly configured and exported
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 const INITIAL_PLAYERS = [];
 const INITIAL_SCHEDULE = [];
@@ -34,14 +36,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [dashboardLevelFilter, setDashboardLevelFilter] = useState('Varsity'); // 'Varsity' | 'JV' | 'All'
   
-  const [players, setPlayers] = useState(() => {
-    const saved = localStorage.getItem('north_soccer_players');
-    return saved ? JSON.parse(saved) : INITIAL_PLAYERS;
-  });
-  const [schedule, setSchedule] = useState(() => {
-    const saved = localStorage.getItem('north_soccer_schedule');
-    return saved ? JSON.parse(saved) : INITIAL_SCHEDULE;
-  });
+  const [players, setPlayers] = useState(INITIAL_PLAYERS);
+  const [schedule, setSchedule] = useState(INITIAL_SCHEDULE);
+  const [loadingData, setLoadingData] = useState(true);
 
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,13 +85,46 @@ export default function App() {
     attendance: {}
   });
 
+  // Real-time synchronization with Firestore using onSnapshot
   useEffect(() => {
-    localStorage.setItem('north_soccer_players', JSON.stringify(players));
-  }, [players]);
+    const docRef = doc(db, 'north_soccer_team', 'main_data');
+    
+    // Initial fetch check using getDoc (demonstrating explicit getDoc usage alongside onSnapshot)
+    getDoc(docRef).then((docSnap) => {
+      if (!docSnap.exists()) {
+        // Initialize document if it doesn't exist yet
+        setDoc(docRef, { players: INITIAL_PLAYERS, schedule: INITIAL_SCHEDULE });
+      }
+    }).catchall?.((err) => console.error("Error checking document:", err));
 
-  useEffect(() => {
-    localStorage.setItem('north_soccer_schedule', JSON.stringify(schedule));
-  }, [schedule]);
+    // Real-time listener using onSnapshot
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.players) setPlayers(data.players);
+        if (data.schedule) setSchedule(data.schedule);
+      }
+      setLoadingData(false);
+    }, (error) => {
+      console.error("Error fetching real-time data: ", error);
+      setLoadingData(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Helper function to commit updated players and schedule to Firestore using setDoc
+  const saveToFirestore = async (updatedPlayers, updatedSchedule) => {
+    try {
+      const docRef = doc(db, 'north_soccer_team', 'main_data');
+      await setDoc(docRef, {
+        players: updatedPlayers,
+        schedule: updatedSchedule
+      }, { merge: true });
+    } catch (error) {
+      console.error("Error saving data to Firestore: ", error);
+    }
+  };
 
   const filteredPlayers = useMemo(() => {
     return players.filter(p => {
@@ -274,12 +304,16 @@ export default function App() {
     e.preventDefault();
     if (!newPlayer.name) return;
 
+    let updatedPlayers;
     if (editingPlayer) {
-      setPlayers(players.map(p => p.id === editingPlayer.id ? { ...newPlayer, id: p.id, number: Number(newPlayer.number) || 0 } : p));
+      updatedPlayers = players.map(p => p.id === editingPlayer.id ? { ...newPlayer, id: p.id, number: Number(newPlayer.number) || 0 } : p);
     } else {
       const playerObj = { ...newPlayer, id: 'p_' + Date.now(), number: Number(newPlayer.number) || 0 };
-      setPlayers([...players, playerObj]);
+      updatedPlayers = [...players, playerObj];
     }
+
+    setPlayers(updatedPlayers);
+    saveToFirestore(updatedPlayers, schedule);
 
     setNewPlayer({ name: '', number: '', position: 'Forward', grade: 'Freshman', level: 'Varsity', notes: '' });
     setEditingPlayer(null);
@@ -288,7 +322,9 @@ export default function App() {
 
   const handleDeletePlayer = (playerId) => {
     if (window.confirm('Are you sure you want to remove this player?')) {
-      setPlayers(players.filter(p => p.id !== playerId));
+      const updatedPlayers = players.filter(p => p.id !== playerId);
+      setPlayers(updatedPlayers);
+      saveToFirestore(updatedPlayers, schedule);
     }
   };
 
@@ -328,12 +364,16 @@ export default function App() {
     e.preventDefault();
     if (!newEvent.title && !newEvent.date) return;
 
+    let updatedSchedule;
     if (editingEvent) {
-      setSchedule(schedule.map(item => item.id === editingEvent.id ? { ...newEvent, id: item.id } : item));
+      updatedSchedule = schedule.map(item => item.id === editingEvent.id ? { ...newEvent, id: item.id } : item);
     } else {
       const eventObj = { ...newEvent, id: 'e_' + Date.now() };
-      setSchedule([eventObj, ...schedule]);
+      updatedSchedule = [eventObj, ...schedule];
     }
+
+    setSchedule(updatedSchedule);
+    saveToFirestore(players, updatedSchedule);
 
     setShowEventModal(false);
     setEditingEvent(null);
@@ -341,7 +381,9 @@ export default function App() {
 
   const handleDeleteEvent = (eventId) => {
     if (window.confirm('Are you sure you want to delete this event?')) {
-      setSchedule(schedule.filter(item => item.id !== eventId));
+      const updatedSchedule = schedule.filter(item => item.id !== eventId);
+      setSchedule(updatedSchedule);
+      saveToFirestore(players, updatedSchedule);
     }
   };
 
@@ -373,12 +415,15 @@ export default function App() {
   const handleSaveStats = () => {
     if (!activeMatchForStats) return;
 
-    setSchedule(schedule.map(item => {
+    const updatedSchedule = schedule.map(item => {
       if (item.id === activeMatchForStats.id) {
         return { ...item, stats: matchStats };
       }
       return item;
-    }));
+    });
+
+    setSchedule(updatedSchedule);
+    saveToFirestore(players, updatedSchedule);
 
     setShowStatsModal(false);
     setActiveMatchForStats(null);
@@ -435,7 +480,9 @@ export default function App() {
     };
 
     setActiveLiveMatch(updatedMatch);
-    setSchedule(schedule.map(item => item.id === updatedMatch.id ? updatedMatch : item));
+    const updatedSchedule = schedule.map(item => item.id === updatedMatch.id ? updatedMatch : item);
+    setSchedule(updatedSchedule);
+    saveToFirestore(players, updatedSchedule);
 
     // Log the event
     const logEntry = {
@@ -471,7 +518,9 @@ export default function App() {
     };
 
     setActiveLiveMatch(updatedMatch);
-    setSchedule(schedule.map(item => item.id === updatedMatch.id ? updatedMatch : item));
+    const updatedSchedule = schedule.map(item => item.id === updatedMatch.id ? updatedMatch : item);
+    setSchedule(updatedSchedule);
+    saveToFirestore(players, updatedSchedule);
 
     // Log the event
     const logEntry = {
@@ -507,7 +556,9 @@ export default function App() {
       };
 
       setActiveLiveMatch(updatedMatch);
-      setSchedule(schedule.map(item => item.id === updatedMatch.id ? updatedMatch : item));
+      const updatedSchedule = schedule.map(item => item.id === updatedMatch.id ? updatedMatch : item);
+      setSchedule(updatedSchedule);
+      saveToFirestore(players, updatedSchedule);
       setLiveLog(prev => prev.slice(1));
       return;
     }
@@ -537,7 +588,9 @@ export default function App() {
       };
 
       setActiveLiveMatch(updatedMatch);
-      setSchedule(schedule.map(item => item.id === updatedMatch.id ? updatedMatch : item));
+      const updatedSchedule = schedule.map(item => item.id === updatedMatch.id ? updatedMatch : item);
+      setSchedule(updatedSchedule);
+      saveToFirestore(players, updatedSchedule);
       setLiveLog(prev => prev.slice(1));
     }
   };
@@ -559,16 +612,30 @@ export default function App() {
   const handleSaveAttendance = () => {
     if (!activeEventForAttendance) return;
 
-    setSchedule(schedule.map(item => {
+    const updatedSchedule = schedule.map(item => {
       if (item.id === activeEventForAttendance.id) {
         return { ...item, attendance: sessionAttendance };
       }
       return item;
-    }));
+    });
+
+    setSchedule(updatedSchedule);
+    saveToFirestore(players, updatedSchedule);
 
     setShowAttendanceModal(false);
     setActiveEventForAttendance(null);
   };
+
+  if (loadingData) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Loading North Soccer Data from Firebase...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans pb-12 selection:bg-yellow-400 selection:text-zinc-950">
