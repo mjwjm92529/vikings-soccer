@@ -87,31 +87,56 @@ export default function App() {
 
   // Real-time synchronization with Firestore using onSnapshot
   useEffect(() => {
+    let isMounted = true;
     const docRef = doc(db, 'north_soccer_team', 'main_data');
-    
-    // Initial fetch check using getDoc (demonstrating explicit getDoc usage alongside onSnapshot)
-    getDoc(docRef).then((docSnap) => {
-      if (!docSnap.exists()) {
-        // Initialize document if it doesn't exist yet
-        setDoc(docRef, { players: INITIAL_PLAYERS, schedule: INITIAL_SCHEDULE });
+
+    const initAndListen = async () => {
+      try {
+        // 1. Check if document exists before doing anything else
+        const docSnap = await getDoc(docRef);
+
+        if (!docSnap.exists() && isMounted) {
+          // Only create the initial document if the database is brand new
+          await setDoc(docRef, {
+            username: "New User",
+            theme: "light",
+            notificationsEnabled: true,
+            createdAt: new Date().toISOString(),
+            players: [],
+            schedule: []
+          });
+          console.log("Brand new database initialized.");
+        }
+      } catch (error) {
+        console.error("Error checking/initializing database:", error);
       }
-    }).catchall?.((err) => console.error("Error checking document:", err));
+    };
+
+    initAndListen();
 
     // Real-time listener using onSnapshot
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
+      if (docSnap.exists() && isMounted) {
         const data = docSnap.data();
         if (data.players) setPlayers(data.players);
         if (data.schedule) setSchedule(data.schedule);
       } else {
         console.log("No document found in Firestore!");
       }
+      if (isMounted) {
+        setLoadingData(false);
+      }
     }, (error) => {
       console.error("Error listening to Firestore:", error);
+      if (isMounted) {
+        setLoadingData(false);
+      }
     });
-      
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // Helper function to commit updated players and schedule to Firestore using setDoc
