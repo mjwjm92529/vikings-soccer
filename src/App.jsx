@@ -181,6 +181,14 @@ export default function App() {
     return [...players].sort((a, b) => (Number(a.number) || 0) - (Number(b.number) || 0));
   }, [players]);
 
+  // Filter past practice sessions (completed, past date, or attendance recorded)
+  const pastPracticeSessions = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return schedule
+      .filter(s => s.type === 'Practice' && (s.status === 'Completed' || (s.date && s.date <= today) || Object.keys(s.attendance || {}).length > 0))
+      .sort((a, b) => (a.date > b.date ? 1 : -1));
+  }, [schedule]);
+
   // Separate metrics for Varsity and JV matches
   const teamMetrics = useMemo(() => {
     const calcMetrics = (levelFilter) => {
@@ -1453,22 +1461,30 @@ export default function App() {
         {/* PRACTICE ATTENDANCE OVERVIEW TAB */}
         {activeTab === 'attendance' && (
           <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 overflow-x-auto space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-yellow-400" /> Practice Attendance Overview
-              </h2>
-              <p className="text-xs text-zinc-400">All players sorted by jersey number</p>
+            <div className="flex flex-wrap justify-between items-center gap-2">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-yellow-400" /> Practice Attendance Overview
+                </h2>
+                <p className="text-xs text-zinc-400">All players sorted by jersey number & cumulative practice attendance rates</p>
+              </div>
+              <div className="text-xs font-semibold text-zinc-400 bg-zinc-950 px-3 py-1.5 rounded-xl border border-zinc-800">
+                Total Past Practices: <span className="text-yellow-400 font-bold">{pastPracticeSessions.length}</span>
+              </div>
             </div>
 
             {players.length === 0 ? (
               <p className="text-zinc-500 text-xs text-center py-6">Add players to start tracking practice attendance.</p>
+            ) : pastPracticeSessions.length === 0 ? (
+              <p className="text-zinc-500 text-xs text-center py-6">No past practice sessions recorded yet.</p>
             ) : (
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-zinc-800 text-zinc-400">
                     <th className="py-3 px-4 font-bold uppercase">Player</th>
                     <th className="py-3 px-4 font-bold uppercase">Level</th>
-                    {schedule.filter(s => s.type === 'Practice').slice(0, 5).map(event => (
+                    <th className="py-3 px-4 font-bold uppercase text-center min-w-[110px]">Attendance %</th>
+                    {pastPracticeSessions.map(event => (
                       <th key={event.id} className="py-3 px-4 font-bold uppercase text-center min-w-[120px]">
                         <div>{event.title || 'Practice'}</div>
                         <div className="text-[10px] text-zinc-500 font-normal">{event.date}</div>
@@ -1477,34 +1493,59 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
-                  {practiceAttendancePlayers.map((p) => (
-                    <tr key={p.id} className="hover:bg-zinc-950/50">
-                      <td className="py-3 px-4 font-semibold text-white">
-                        #{p.number} {p.name}
-                      </td>
-                      <td className="py-3 px-4 text-zinc-400">{p.level || 'Varsity'}</td>
-                      {schedule.filter(s => s.type === 'Practice').slice(0, 5).map(event => {
-                        const status = event.attendance?.[p.id] || 'Not Marked';
-                        return (
-                          <td key={event.id} className="py-3 px-4 text-center">
-                            <span className={`px-2.5 py-1 rounded-lg font-bold text-[11px] inline-block ${
-                              status === 'Attended'
+                  {practiceAttendancePlayers.map((p) => {
+                    const attendedOrLateCount = pastPracticeSessions.filter(event => {
+                      const status = event.attendance?.[p.id];
+                      return status === 'Attended' || status === 'Late';
+                    }).length;
+                    const totalSessions = pastPracticeSessions.length;
+                    const attendancePct = totalSessions > 0 ? Math.round((attendedOrLateCount / totalSessions) * 100) : 0;
+
+                    return (
+                      <tr key={p.id} className="hover:bg-zinc-950/50">
+                        <td className="py-3 px-4 font-semibold text-white">
+                          #{p.number} {p.name}
+                        </td>
+                        <td className="py-3 px-4 text-zinc-400">{p.level || 'Varsity'}</td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className={`px-2.5 py-1 rounded-lg font-black text-xs ${
+                              attendancePct >= 80
                                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : status === 'Late'
+                                : attendancePct >= 60
                                 ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20'
-                                : status === 'Excused'
-                                ? 'bg-blue-400/10 text-blue-400 border border-blue-400/20'
-                                : status === 'Absent'
-                                ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                                : 'bg-zinc-800/50 text-zinc-500'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
                             }`}>
-                              {status}
+                              {attendancePct}%
                             </span>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                            <span className="text-[10px] text-zinc-500 mt-0.5">
+                              {attendedOrLateCount}/{totalSessions} sessions
+                            </span>
+                          </div>
+                        </td>
+                        {pastPracticeSessions.map(event => {
+                          const status = event.attendance?.[p.id] || 'Not Marked';
+                          return (
+                            <td key={event.id} className="py-3 px-4 text-center">
+                              <span className={`px-2.5 py-1 rounded-lg font-bold text-[11px] inline-block ${
+                                status === 'Attended'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : status === 'Late'
+                                  ? 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20'
+                                  : status === 'Excused'
+                                  ? 'bg-blue-400/10 text-blue-400 border border-blue-400/20'
+                                  : status === 'Absent'
+                                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                  : 'bg-zinc-800/50 text-zinc-500'
+                              }`}>
+                                {status}
+                              </span>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
