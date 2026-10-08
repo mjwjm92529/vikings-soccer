@@ -307,6 +307,175 @@ export default function App() {
     return days;
   }, [calendarMonth]);
 
+  // GENERATE SINGLE-PAGE PDF MATCH REPORT
+  const handleGenerateMatchPDF = (matchEvent) => {
+    if (!matchEvent) return;
+
+    const statsMap = matchEvent.stats || {};
+    const matchLevel = matchEvent.level || 'Varsity';
+
+    // Find players who were marked as played
+    const playedPlayers = players
+      .filter(p => statsMap[p.id]?.played)
+      .sort((a, b) => (Number(a.number) || 0) - (Number(b.number) || 0));
+
+    // High level summary items
+    const scorers = [];
+    const assisters = [];
+    const yellowCards = [];
+    const redCards = [];
+
+    playedPlayers.forEach(p => {
+      const st = statsMap[p.id] || {};
+      if (st.goals > 0) scorers.push(`#${p.number} ${p.name} (${st.goals})`);
+      if (st.assists > 0) assisters.push(`#${p.number} ${p.name} (${st.assists})`);
+      if (st.yellowCards > 0) yellowCards.push(`#${p.number} ${p.name} (${st.yellowCards} YC)`);
+      if (st.redCards > 0) redCards.push(`#${p.number} ${p.name} (${st.redCards} RC)`);
+    });
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to open the PDF print report.');
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Match Report - vs ${matchEvent.title} (${matchEvent.date})</title>
+        <style>
+          @page { size: A4 portrait; margin: 12mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #18181b; margin: 0; padding: 0; font-size: 11px; line-height: 1.3; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #18181b; padding-bottom: 8px; margin-bottom: 12px; }
+          .title { font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; }
+          .subtitle { font-size: 11px; color: #52525b; font-weight: 600; margin-top: 2px; }
+          .score-card { background: #18181b; color: #ffffff; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+          .score-title { font-size: 14px; font-weight: 800; }
+          .score-number { font-size: 22px; font-weight: 900; color: #facc15; }
+          .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+          .summary-box { background: #f4f4f5; border: 1px solid #e4e4e7; border-radius: 6px; padding: 8px 10px; }
+          .summary-box h4 { margin: 0 0 4px 0; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #52525b; }
+          .summary-box p { margin: 0; font-size: 11px; font-weight: 600; color: #09090b; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          th { background: #18181b; color: #ffffff; text-align: left; padding: 6px 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+          td { padding: 6px 8px; border-bottom: 1px solid #e4e4e7; font-size: 10px; font-weight: 500; }
+          tr:nth-child(even) td { background: #fafafa; }
+          .text-center { text-align: center; }
+          .font-bold { font-weight: 700; }
+          .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; }
+          .badge-win { background: #dcfce7; color: #166534; }
+          .badge-loss { background: #fee2e2; color: #991b1b; }
+          .badge-draw { background: #fef9c3; color: #854d0e; }
+          .footer { margin-top: 14px; text-align: center; font-size: 9px; color: #71717a; border-top: 1px solid #e4e4e7; padding-top: 6px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1 class="title">North Soccer Team</h1>
+            <div class="subtitle">Official Match Report • ${matchLevel} Squad</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-weight: 800; font-size: 12px;">${matchEvent.date}</div>
+            <div class="subtitle">${matchEvent.time ? formatTimeTo12Hour(matchEvent.time) : ''} ${matchEvent.location ? '• ' + matchEvent.location : ''}</div>
+          </div>
+        </div>
+
+        <div class="score-card">
+          <div>
+            <div class="score-title">vs ${matchEvent.title}</div>
+            <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;">
+              Status: ${matchEvent.status || 'Completed'} 
+              ${matchEvent.result ? `<span class="badge badge-${matchEvent.result.toLowerCase()}">${matchEvent.result.toUpperCase()}</span>` : ''}
+            </div>
+          </div>
+          <div class="score-number">${matchEvent.goalsFor || 0} - ${matchEvent.goalsAgainst || 0}</div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-box">
+            <h4>Goals Scored</h4>
+            <p>${scorers.length > 0 ? scorers.join(', ') : 'None'}</p>
+          </div>
+          <div class="summary-box">
+            <h4>Assists</h4>
+            <p>${assisters.length > 0 ? assisters.join(', ') : 'None'}</p>
+          </div>
+          <div class="summary-box">
+            <h4>Cards & Bookings</h4>
+            <p>${[...yellowCards, ...redCards].length > 0 ? [...yellowCards, ...redCards].join(', ') : 'None'}</p>
+          </div>
+        </div>
+
+        <h3 style="font-size: 11px; font-weight: 800; text-transform: uppercase; margin: 12px 0 4px 0; color: #18181b;">
+          Player Match Performance (${playedPlayers.length} Active Roster Members)
+        </h3>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 5%;">#</th>
+              <th style="width: 25%;">Player Name</th>
+              <th style="width: 15%;">Position</th>
+              <th class="text-center" style="width: 9%;">Shots</th>
+              <th class="text-center" style="width: 9%;">SOG</th>
+              <th class="text-center" style="width: 9%;">Goals</th>
+              <th class="text-center" style="width: 9%;">Assists</th>
+              <th class="text-center" style="width: 10%;">Cards</th>
+              <th class="text-center" style="width: 9%;">Saves</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${playedPlayers.length === 0 ? `
+              <tr>
+                <td colspan="9" class="text-center" style="padding: 16px; color: #71717a;">No player stats recorded as played for this match.</td>
+              </tr>
+            ` : playedPlayers.map(p => {
+              const st = statsMap[p.id] || {};
+              const cardsText = [];
+              if (st.yellowCards > 0) cardsText.push(`${st.yellowCards}Y`);
+              if (st.redCards > 0) cardsText.push(`${st.redCards}R`);
+              
+              return `
+                <tr>
+                  <td class="font-bold">#${p.number}</td>
+                  <td class="font-bold">${p.name}</td>
+                  <td style="color: #52525b;">${p.position}</td>
+                  <td class="text-center">${st.shots || 0}</td>
+                  <td class="text-center">${st.shotsOnGoal || 0}</td>
+                  <td class="text-center font-bold" style="color: ${st.goals > 0 ? '#15803d' : 'inherit'};">${st.goals || 0}</td>
+                  <td class="text-center">${st.assists || 0}</td>
+                  <td class="text-center">${cardsText.length > 0 ? cardsText.join(' / ') : '-'}</td>
+                  <td class="text-center">${p.position === 'Goalkeeper' ? (st.saves || 0) : '-'}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+
+        ${matchEvent.notes ? `
+          <div style="margin-top: 12px; padding: 8px; background: #f4f4f5; border-radius: 6px; border: 1px solid #e4e4e7;">
+            <strong style="font-size: 10px; uppercase; color: #52525b;">Match Notes & Strategy:</strong>
+            <div style="font-size: 10px; margin-top: 2px;">${matchEvent.notes}</div>
+          </div>
+        ` : ''}
+
+        <div class="footer">
+          Generated by North Soccer Team Operations System • ${new Date().toLocaleDateString()}
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const handleOpenAddPlayerModal = () => {
     setEditingPlayer(null);
     setNewPlayer({ name: '', number: '', position: 'Forward', grade: 'Freshman', level: 'Varsity', notes: '' });
@@ -1163,12 +1332,21 @@ export default function App() {
 
                           <div className="flex items-center gap-2">
                             {event.type === 'Match' && (
-                              <button
-                                onClick={() => handleOpenLiveTracker(event)}
-                                className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-black rounded-lg text-xs flex items-center gap-1 shadow-md shadow-yellow-400/10"
-                              >
-                                <Zap className="w-3.5 h-3.5 fill-current" /> Live Tracker
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleOpenLiveTracker(event)}
+                                  className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-black rounded-lg text-xs flex items-center gap-1 shadow-md shadow-yellow-400/10"
+                                >
+                                  <Zap className="w-3.5 h-3.5 fill-current" /> Live Tracker
+                                </button>
+                                <button
+                                  onClick={() => handleGenerateMatchPDF(event)}
+                                  className="p-2 text-zinc-300 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 rounded-lg text-xs font-bold flex items-center gap-1"
+                                  title="Export PDF Match Report"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-yellow-400" /> PDF Report
+                                </button>
+                              </>
                             )}
 
                             {event.type === 'Practice' && (
@@ -1267,12 +1445,21 @@ export default function App() {
                             )}
 
                             {event.type === 'Match' && (
-                              <button
-                                onClick={() => handleOpenLiveTracker(event)}
-                                className="px-3 py-1.5 bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 hover:bg-yellow-400 hover:text-zinc-950 font-bold rounded-lg text-xs flex items-center gap-1"
-                              >
-                                <Zap className="w-3.5 h-3.5" /> Tracker
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleOpenLiveTracker(event)}
+                                  className="px-3 py-1.5 bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 hover:bg-yellow-400 hover:text-zinc-950 font-bold rounded-lg text-xs flex items-center gap-1"
+                                >
+                                  <Zap className="w-3.5 h-3.5" /> Tracker
+                                </button>
+                                <button
+                                  onClick={() => handleGenerateMatchPDF(event)}
+                                  className="p-2 text-zinc-300 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 rounded-lg text-xs font-bold flex items-center gap-1"
+                                  title="Export PDF Match Report"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-yellow-400" /> PDF Report
+                                </button>
+                              </>
                             )}
 
                             {event.type === 'Practice' && (
@@ -1350,12 +1537,20 @@ export default function App() {
 
                         <div className="pt-2 border-t border-zinc-800/80 flex justify-end gap-2">
                           {event.type === 'Match' && (
-                            <button
-                              onClick={() => handleOpenLiveTracker(event)}
-                              className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-bold rounded-lg text-xs flex items-center gap-1"
-                            >
-                              <Zap className="w-3.5 h-3.5 fill-current" /> Live Tracker
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleOpenLiveTracker(event)}
+                                className="px-3 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-bold rounded-lg text-xs flex items-center gap-1"
+                              >
+                                <Zap className="w-3.5 h-3.5 fill-current" /> Live Tracker
+                              </button>
+                              <button
+                                onClick={() => handleGenerateMatchPDF(event)}
+                                className="p-2 text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-bold flex items-center gap-1"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-yellow-400" /> PDF Report
+                              </button>
+                            </>
                           )}
                           {event.type === 'Practice' && (
                             <button
@@ -1589,16 +1784,25 @@ export default function App() {
             </div>
 
             {/* Scoreboard display */}
-            <div className="flex items-center gap-4 bg-zinc-950 border border-zinc-800 px-4 py-2 rounded-2xl">
-              <div className="text-center">
-                <span className="text-[10px] uppercase font-bold text-zinc-500">North</span>
-                <div className="text-2xl font-black text-yellow-400">{activeLiveMatch.goalsFor || 0}</div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4 bg-zinc-950 border border-zinc-800 px-4 py-2 rounded-2xl">
+                <div className="text-center">
+                  <span className="text-[10px] uppercase font-bold text-zinc-500">North</span>
+                  <div className="text-2xl font-black text-yellow-400">{activeLiveMatch.goalsFor || 0}</div>
+                </div>
+                <span className="text-zinc-600 font-bold">-</span>
+                <div className="text-center">
+                  <span className="text-[10px] uppercase font-bold text-zinc-500">Opponent</span>
+                  <div className="text-2xl font-black text-white">{activeLiveMatch.goalsAgainst || 0}</div>
+                </div>
               </div>
-              <span className="text-zinc-600 font-bold">-</span>
-              <div className="text-center">
-                <span className="text-[10px] uppercase font-bold text-zinc-500">Opponent</span>
-                <div className="text-2xl font-black text-white">{activeLiveMatch.goalsAgainst || 0}</div>
-              </div>
+
+              <button
+                onClick={() => handleGenerateMatchPDF(activeLiveMatch)}
+                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 border border-zinc-700"
+              >
+                <FileText className="w-4 h-4 text-yellow-400" /> PDF Report
+              </button>
             </div>
           </div>
 
@@ -1762,10 +1966,16 @@ export default function App() {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-zinc-800 flex justify-end">
+          <div className="pt-3 border-t border-zinc-800 flex justify-between items-center">
+            <button
+              onClick={() => handleGenerateMatchPDF(activeLiveMatch)}
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 border border-zinc-700"
+            >
+              <FileText className="w-4 h-4 text-yellow-400" /> Generate PDF Match Report
+            </button>
             <button
               onClick={() => setShowLiveTracker(false)}
-              className="px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-bold rounded-xl text-xs"
+              className="px-5 py-2 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-bold rounded-xl text-xs"
             >
               Done & Save Session
             </button>
@@ -1884,9 +2094,18 @@ export default function App() {
                   {activeMatchForStats.date} {activeMatchForStats.time && `• ${formatTimeTo12Hour(activeMatchForStats.time)}`}
                 </p>
               </div>
-              <button onClick={() => setShowStatsModal(false)} className="text-zinc-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleGenerateMatchPDF(activeMatchForStats)}
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 border border-zinc-700"
+                >
+                  <FileText className="w-4 h-4 text-yellow-400" /> Print PDF Report
+                </button>
+                <button onClick={() => setShowStatsModal(false)} className="text-zinc-400 hover:text-white p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {eligibleMatchPlayers.length === 0 ? (
