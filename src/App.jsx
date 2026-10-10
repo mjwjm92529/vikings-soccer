@@ -51,6 +51,7 @@ export default function App() {
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [activeMatchForStats, setActiveMatchForStats] = useState(null);
   const [matchStats, setMatchStats] = useState({});
+  const [opponentMatchStats, setOpponentMatchStats] = useState({ fouls: 0, yellowCards: 0, redCards: 0 });
 
   // LIVE MATCHDAY TRACKER STATE
   const [showLiveTracker, setShowLiveTracker] = useState(false);
@@ -82,6 +83,7 @@ export default function App() {
     goalsAgainst: '',
     notes: '',
     stats: {},
+    opponentStats: { fouls: 0, yellowCards: 0, redCards: 0 },
     attendance: {}
   });
 
@@ -312,6 +314,7 @@ export default function App() {
     if (!matchEvent) return;
 
     const statsMap = matchEvent.stats || {};
+    const oppStats = matchEvent.opponentStats || { fouls: 0, yellowCards: 0, redCards: 0 };
     const matchLevel = matchEvent.level || 'Varsity';
 
     // Find players who were marked as played
@@ -324,6 +327,7 @@ export default function App() {
     const assisters = [];
     const yellowCards = [];
     const redCards = [];
+    let totalNorthFouls = 0;
 
     playedPlayers.forEach(p => {
       const st = statsMap[p.id] || {};
@@ -331,6 +335,7 @@ export default function App() {
       if (st.assists > 0) assisters.push(`#${p.number} ${p.name} (${st.assists})`);
       if (st.yellowCards > 0) yellowCards.push(`#${p.number} ${p.name} (${st.yellowCards} YC)`);
       if (st.redCards > 0) redCards.push(`#${p.number} ${p.name} (${st.redCards} RC)`);
+      totalNorthFouls += Number(st.fouls || 0);
     });
 
     const printWindow = window.open('', '_blank');
@@ -353,10 +358,10 @@ export default function App() {
           .score-card { background: #18181b; color: #ffffff; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
           .score-title { font-size: 14px; font-weight: 800; }
           .score-number { font-size: 22px; font-weight: 900; color: #facc15; }
-          .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+          .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
           .summary-box { background: #f4f4f5; border: 1px solid #e4e4e7; border-radius: 6px; padding: 8px 10px; }
           .summary-box h4 { margin: 0 0 4px 0; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #52525b; }
-          .summary-box p { margin: 0; font-size: 11px; font-weight: 600; color: #09090b; }
+          .summary-box p { margin: 0; font-size: 10px; font-weight: 600; color: #09090b; }
           table { width: 100%; border-collapse: collapse; margin-top: 8px; }
           th { background: #18181b; color: #ffffff; text-align: left; padding: 6px 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
           td { padding: 6px 8px; border-bottom: 1px solid #e4e4e7; font-size: 10px; font-weight: 500; }
@@ -406,6 +411,10 @@ export default function App() {
             <h4>Cards & Bookings</h4>
             <p>${[...yellowCards, ...redCards].length > 0 ? [...yellowCards, ...redCards].join(', ') : 'None'}</p>
           </div>
+          <div class="summary-box">
+            <h4>Fouls & Opponent Stats</h4>
+            <p>North Fouls: <strong>${totalNorthFouls}</strong><br>Opp. Fouls: <strong>${oppStats.fouls || 0}</strong> (Y:${oppStats.yellowCards || 0} / R:${oppStats.redCards || 0})</p>
+          </div>
         </div>
 
         <h3 style="font-size: 11px; font-weight: 800; text-transform: uppercase; margin: 12px 0 4px 0; color: #18181b;">
@@ -416,20 +425,21 @@ export default function App() {
           <thead>
             <tr>
               <th style="width: 5%;">#</th>
-              <th style="width: 25%;">Player Name</th>
-              <th style="width: 15%;">Position</th>
-              <th class="text-center" style="width: 9%;">Shots</th>
-              <th class="text-center" style="width: 9%;">SOG</th>
-              <th class="text-center" style="width: 9%;">Goals</th>
-              <th class="text-center" style="width: 9%;">Assists</th>
+              <th style="width: 23%;">Player Name</th>
+              <th style="width: 14%;">Position</th>
+              <th class="text-center" style="width: 8%;">Shots</th>
+              <th class="text-center" style="width: 8%;">SOG</th>
+              <th class="text-center" style="width: 8%;">Goals</th>
+              <th class="text-center" style="width: 8%;">Assists</th>
+              <th class="text-center" style="width: 8%;">Fouls</th>
               <th class="text-center" style="width: 10%;">Cards</th>
-              <th class="text-center" style="width: 9%;">Saves</th>
+              <th class="text-center" style="width: 8%;">Saves</th>
             </tr>
           </thead>
           <tbody>
             ${playedPlayers.length === 0 ? `
               <tr>
-                <td colspan="9" class="text-center" style="padding: 16px; color: #71717a;">No player stats recorded as played for this match.</td>
+                <td colspan="10" class="text-center" style="padding: 16px; color: #71717a;">No player stats recorded as played for this match.</td>
               </tr>
             ` : playedPlayers.map(p => {
               const st = statsMap[p.id] || {};
@@ -446,6 +456,7 @@ export default function App() {
                   <td class="text-center">${st.shotsOnGoal || 0}</td>
                   <td class="text-center font-bold" style="color: ${st.goals > 0 ? '#15803d' : 'inherit'};">${st.goals || 0}</td>
                   <td class="text-center">${st.assists || 0}</td>
+                  <td class="text-center">${st.fouls || 0}</td>
                   <td class="text-center">${cardsText.length > 0 ? cardsText.join(' / ') : '-'}</td>
                   <td class="text-center">${p.position === 'Goalkeeper' ? (st.saves || 0) : '-'}</td>
                 </tr>
@@ -538,6 +549,7 @@ export default function App() {
       goalsAgainst: '',
       notes: '',
       stats: {},
+      opponentStats: { fouls: 0, yellowCards: 0, redCards: 0 },
       attendance: {}
     });
     setShowEventModal(true);
@@ -550,6 +562,7 @@ export default function App() {
       result: '',
       goalsFor: '',
       goalsAgainst: '',
+      opponentStats: { fouls: 0, yellowCards: 0, redCards: 0 },
       ...eventItem
     });
     setShowEventModal(true);
@@ -586,12 +599,13 @@ export default function App() {
   const handleOpenStatsModal = (matchEvent) => {
     setActiveMatchForStats(matchEvent);
     setMatchStats(matchEvent.stats || {});
+    setOpponentMatchStats(matchEvent.opponentStats || { fouls: 0, yellowCards: 0, redCards: 0 });
     setShowStatsModal(true);
   };
 
   const handleStatChange = (playerId, field, value) => {
     setMatchStats(prev => {
-      const current = prev[playerId] || { played: false, shots: 0, shotsOnGoal: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, saves: 0 };
+      const current = prev[playerId] || { played: false, shots: 0, shotsOnGoal: 0, goals: 0, assists: 0, fouls: 0, yellowCards: 0, redCards: 0, saves: 0 };
       let updatedValue = value;
       if (field !== 'played') {
         updatedValue = Math.max(0, parseInt(value, 10) || 0);
@@ -607,12 +621,19 @@ export default function App() {
     });
   };
 
+  const handleOpponentStatChange = (field, value) => {
+    setOpponentMatchStats(prev => ({
+      ...prev,
+      [field]: Math.max(0, parseInt(value, 10) || 0)
+    }));
+  };
+
   const handleSaveStats = () => {
     if (!activeMatchForStats) return;
 
     const updatedSchedule = schedule.map(item => {
       if (item.id === activeMatchForStats.id) {
-        return { ...item, stats: matchStats };
+        return { ...item, stats: matchStats, opponentStats: opponentMatchStats };
       }
       return item;
     });
@@ -638,7 +659,7 @@ export default function App() {
     if (!activeLiveMatch || !playerObj || !actionKey) return;
 
     const currentStats = activeLiveMatch.stats || {};
-    const pStat = currentStats[playerObj.id] || { played: true, shots: 0, shotsOnGoal: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, saves: 0 };
+    const pStat = currentStats[playerObj.id] || { played: true, shots: 0, shotsOnGoal: 0, goals: 0, assists: 0, fouls: 0, yellowCards: 0, redCards: 0, saves: 0 };
 
     let fieldsToIncrement = [];
     if (actionKey === 'Shot') {
@@ -649,6 +670,8 @@ export default function App() {
       fieldsToIncrement = ['goals', 'shotsOnGoal', 'shots'];
     } else if (actionKey === 'Assist') {
       fieldsToIncrement = ['assists'];
+    } else if (actionKey === 'Foul') {
+      fieldsToIncrement = ['fouls'];
     } else if (actionKey === 'Yellow Card') {
       fieldsToIncrement = ['yellowCards'];
     } else if (actionKey === 'Red Card') {
@@ -703,7 +726,7 @@ export default function App() {
     setSelectedActionForTracker(null);
   };
 
-  // Record Opponent Stat (Goal or Shot)
+  // Record Opponent Stat (Goal, Shot, Foul, Cards)
   const handleApplyOpponentStat = (actionKey) => {
     if (!activeLiveMatch) return;
 
@@ -712,9 +735,21 @@ export default function App() {
       updatedGoalsAgainst = (Number(activeLiveMatch.goalsAgainst || 0) + 1).toString();
     }
 
+    const currentOpponentStats = activeLiveMatch.opponentStats || { fouls: 0, yellowCards: 0, redCards: 0 };
+    const updatedOpponentStats = { ...currentOpponentStats };
+
+    if (actionKey === 'Opp. Foul') {
+      updatedOpponentStats.fouls = Number(currentOpponentStats.fouls || 0) + 1;
+    } else if (actionKey === 'Opp. Yellow Card') {
+      updatedOpponentStats.yellowCards = Number(currentOpponentStats.yellowCards || 0) + 1;
+    } else if (actionKey === 'Opp. Red Card') {
+      updatedOpponentStats.redCards = Number(currentOpponentStats.redCards || 0) + 1;
+    }
+
     const updatedMatch = {
       ...activeLiveMatch,
-      goalsAgainst: updatedGoalsAgainst
+      goalsAgainst: updatedGoalsAgainst,
+      opponentStats: updatedOpponentStats
     };
 
     setActiveLiveMatch(updatedMatch);
@@ -750,9 +785,21 @@ export default function App() {
         updatedGoalsAgainst = Math.max(0, Number(activeLiveMatch.goalsAgainst || 0) - 1).toString();
       }
 
+      const currentOpponentStats = activeLiveMatch.opponentStats || { fouls: 0, yellowCards: 0, redCards: 0 };
+      const updatedOpponentStats = { ...currentOpponentStats };
+
+      if (lastLog.action === 'Opp. Foul') {
+        updatedOpponentStats.fouls = Math.max(0, Number(currentOpponentStats.fouls || 0) - 1);
+      } else if (lastLog.action === 'Opp. Yellow Card') {
+        updatedOpponentStats.yellowCards = Math.max(0, Number(currentOpponentStats.yellowCards || 0) - 1);
+      } else if (lastLog.action === 'Opp. Red Card') {
+        updatedOpponentStats.redCards = Math.max(0, Number(currentOpponentStats.redCards || 0) - 1);
+      }
+
       const updatedMatch = {
         ...activeLiveMatch,
-        goalsAgainst: updatedGoalsAgainst
+        goalsAgainst: updatedGoalsAgainst,
+        opponentStats: updatedOpponentStats
       };
 
       setActiveLiveMatch(updatedMatch);
@@ -1118,7 +1165,7 @@ export default function App() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredPlayers.map((player) => {
-                  let pGoals = 0, pAssists = 0, pShots = 0, pShotsOnGoal = 0, pYellows = 0, pReds = 0, pSaves = 0, pMatchesPlayed = 0;
+                  let pGoals = 0, pAssists = 0, pShots = 0, pShotsOnGoal = 0, pFouls = 0, pYellows = 0, pReds = 0, pSaves = 0, pMatchesPlayed = 0;
                   
                   schedule.forEach(e => {
                     if (e.type === 'Match' && e.stats?.[player.id]) {
@@ -1128,6 +1175,7 @@ export default function App() {
                       pAssists += Number(pStat.assists || 0);
                       pShots += Number(pStat.shots || 0);
                       pShotsOnGoal += Number(pStat.shotsOnGoal || 0);
+                      pFouls += Number(pStat.fouls || 0);
                       pYellows += Number(pStat.yellowCards || 0);
                       pReds += Number(pStat.redCards || 0);
                       pSaves += Number(pStat.saves || 0);
@@ -1207,11 +1255,13 @@ export default function App() {
                         {player.position === 'Goalkeeper' ? (
                           <div className="col-span-4 pt-1 border-t border-zinc-800/60 flex justify-around items-center">
                             <span className="text-zinc-400 text-[10px] font-bold uppercase">Saves: {pSaves}</span>
+                            <span className="text-zinc-400 text-[10px] font-bold uppercase">Fouls: {pFouls}</span>
                             <span className="text-zinc-400 text-[10px] font-bold uppercase">Cards: Y{pYellows} / R{pReds}</span>
                           </div>
                         ) : (
-                          <div className="col-span-4 pt-1 border-t border-zinc-800/60 text-zinc-400 text-[10px] font-bold uppercase">
-                            Cards: Y{pYellows} / R{pReds}
+                          <div className="col-span-4 pt-1 border-t border-zinc-800/60 flex justify-around items-center text-zinc-400 text-[10px] font-bold uppercase">
+                            <span>Fouls: {pFouls}</span>
+                            <span>Cards: Y{pYellows} / R{pReds}</span>
                           </div>
                         )}
                       </div>
@@ -1814,12 +1864,13 @@ export default function App() {
               </p>
               
               {/* North Player Actions */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-3">
                 {[
                   { key: 'Shot', color: 'bg-zinc-800 text-white border-zinc-700' },
                   { key: 'Shot on Goal', color: 'bg-blue-600 text-white font-black border-blue-500' },
                   { key: 'Goal', color: 'bg-yellow-400 text-zinc-950 font-black border-yellow-300' },
                   { key: 'Assist', color: 'bg-emerald-500 text-zinc-950 font-black border-emerald-400' },
+                  { key: 'Foul', color: 'bg-orange-500 text-zinc-950 font-black border-orange-400' },
                   { key: 'Yellow Card', color: 'bg-amber-500 text-zinc-950 font-black border-amber-400' },
                   { key: 'Red Card', color: 'bg-red-500 text-white font-black border-red-400' },
                   { key: 'Save', color: 'bg-purple-500 text-white font-black border-purple-400' }
@@ -1848,20 +1899,44 @@ export default function App() {
               </div>
 
               {/* Direct Opponent Event Action Buttons */}
-              <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded-2xl flex items-center justify-between gap-3">
-                <span className="text-xs font-bold uppercase text-zinc-400">Opponent Actions:</span>
-                <div className="flex items-center gap-2 flex-1 max-w-xs">
+              <div className="p-3 bg-zinc-950/80 border border-zinc-800/80 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase text-zinc-400">Opponent Actions:</span>
+                  <span className="text-[10px] text-zinc-500 font-semibold bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-800">
+                    Fouls: {activeLiveMatch.opponentStats?.fouls || 0} | YC: {activeLiveMatch.opponentStats?.yellowCards || 0} | RC: {activeLiveMatch.opponentStats?.redCards || 0}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2 flex-1 max-w-xl">
                   <button
                     onClick={() => handleApplyOpponentStat('Opp. Shot')}
-                    className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold border border-zinc-700 rounded-xl text-xs active:scale-95 transition-all"
+                    className="flex-1 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold border border-zinc-700 rounded-xl text-xs active:scale-95 transition-all"
                   >
                     + Opp. Shot
                   </button>
                   <button
                     onClick={() => handleApplyOpponentStat('Opp. Goal')}
-                    className="flex-1 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 font-black rounded-xl text-xs active:scale-95 transition-all"
+                    className="flex-1 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 font-black rounded-xl text-xs active:scale-95 transition-all"
                   >
                     + Opp. Goal
+                  </button>
+                  <button
+                    onClick={() => handleApplyOpponentStat('Opp. Foul')}
+                    className="flex-1 py-2 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/40 font-black rounded-xl text-xs active:scale-95 transition-all"
+                  >
+                    + Opp. Foul
+                  </button>
+                  <button
+                    onClick={() => handleApplyOpponentStat('Opp. Yellow Card')}
+                    className="flex-1 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/40 font-black rounded-xl text-xs active:scale-95 transition-all"
+                  >
+                    + Opp. YC
+                  </button>
+                  <button
+                    onClick={() => handleApplyOpponentStat('Opp. Red Card')}
+                    className="flex-1 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/40 font-black rounded-xl text-xs active:scale-95 transition-all"
+                  >
+                    + Opp. RC
                   </button>
                 </div>
               </div>
@@ -1915,6 +1990,7 @@ export default function App() {
                       <div className="flex items-center gap-1 text-[10px] font-bold">
                         {pStats.goals > 0 && <span className="bg-yellow-400 text-zinc-950 px-1.5 py-0.5 rounded">G:{pStats.goals}</span>}
                         {pStats.assists > 0 && <span className="bg-emerald-400/20 text-emerald-400 px-1 py-0.5 rounded">A:{pStats.assists}</span>}
+                        {pStats.fouls > 0 && <span className="bg-orange-400/20 text-orange-400 px-1 py-0.5 rounded">F:{pStats.fouls}</span>}
                         {pStats.shotsOnGoal > 0 && <span className="bg-blue-400/20 text-blue-400 px-1 py-0.5 rounded">SOG:{pStats.shotsOnGoal}</span>}
                         {pStats.shots > 0 && <span className="bg-zinc-800 text-zinc-400 px-1 py-0.5 rounded">S:{pStats.shots}</span>}
                       </div>
@@ -2083,7 +2159,7 @@ export default function App() {
       {/* MATCH STAT SHEET MODAL */}
       {showStatsModal && activeMatchForStats && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-5xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-6xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center pb-3 border-b border-zinc-800">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
@@ -2108,6 +2184,45 @@ export default function App() {
               </div>
             </div>
 
+            {/* Opponent Discipline & Fouls Summary Bar */}
+            <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-xl flex flex-wrap items-center justify-between gap-4 text-xs">
+              <span className="font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Shield className="w-4 h-4 text-yellow-400" /> Opponent Disciplinaries & Team Stats
+              </span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-zinc-400 font-medium">Opponent Fouls:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={opponentMatchStats.fouls || 0}
+                    onChange={(e) => handleOpponentStatChange('fouls', e.target.value)}
+                    className="w-14 bg-zinc-900 border border-zinc-800 rounded-lg py-1 text-center font-bold text-orange-400 focus:outline-none focus:border-yellow-400"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-zinc-400 font-medium">Yellow Cards:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={opponentMatchStats.yellowCards || 0}
+                    onChange={(e) => handleOpponentStatChange('yellowCards', e.target.value)}
+                    className="w-14 bg-zinc-900 border border-zinc-800 rounded-lg py-1 text-center font-bold text-yellow-400 focus:outline-none focus:border-yellow-400"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-zinc-400 font-medium">Red Cards:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={opponentMatchStats.redCards || 0}
+                    onChange={(e) => handleOpponentStatChange('redCards', e.target.value)}
+                    className="w-14 bg-zinc-900 border border-zinc-800 rounded-lg py-1 text-center font-bold text-red-500 focus:outline-none focus:border-yellow-400"
+                  />
+                </div>
+              </div>
+            </div>
+
             {eligibleMatchPlayers.length === 0 ? (
               <div className="py-8 text-center text-xs text-zinc-400">
                 No eligible players found for this {activeMatchForStats.level || 'Varsity'} match.
@@ -2123,6 +2238,7 @@ export default function App() {
                       <th className="py-2 px-2 font-bold uppercase text-center">Shots on Goal</th>
                       <th className="py-2 px-2 font-bold uppercase text-center">Goals</th>
                       <th className="py-2 px-2 font-bold uppercase text-center">Assists</th>
+                      <th className="py-2 px-2 font-bold uppercase text-center">Fouls</th>
                       <th className="py-2 px-2 font-bold uppercase text-center">Yellow Cards</th>
                       <th className="py-2 px-2 font-bold uppercase text-center">Red Cards</th>
                       <th className="py-2 px-2 font-bold uppercase text-center">GK Saves</th>
@@ -2130,7 +2246,7 @@ export default function App() {
                   </thead>
                   <tbody className="divide-y divide-zinc-800/60">
                     {eligibleMatchPlayers.map((p) => {
-                      const pStat = matchStats[p.id] || { played: false, shots: 0, shotsOnGoal: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0, saves: 0 };
+                      const pStat = matchStats[p.id] || { played: false, shots: 0, shotsOnGoal: 0, goals: 0, assists: 0, fouls: 0, yellowCards: 0, redCards: 0, saves: 0 };
                       const isGK = p.position === 'Goalkeeper';
 
                       return (
@@ -2186,6 +2302,15 @@ export default function App() {
                               value={pStat.assists || 0}
                               onChange={(e) => handleStatChange(p.id, 'assists', e.target.value)}
                               className="w-14 bg-zinc-950 border border-zinc-800 rounded-lg py-1 text-center text-white focus:outline-none focus:border-yellow-400"
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              value={pStat.fouls || 0}
+                              onChange={(e) => handleStatChange(p.id, 'fouls', e.target.value)}
+                              className="w-14 bg-zinc-950 border border-zinc-800 rounded-lg py-1 text-center text-orange-400 font-bold focus:outline-none focus:border-yellow-400"
                             />
                           </td>
                           <td className="py-2 px-2 text-center">
